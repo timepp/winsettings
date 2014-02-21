@@ -1,0 +1,295 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>Software Environment Confuration Tool</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"></meta>
+    <hta:application id="thisHTA" icon="irftp.exe"></hta:application>
+    <style type="text/css">
+        .logwin {
+            padding-left: 5px;
+            font-size: small;
+            border: thin solid deepskyblue;
+            overflow: auto;
+        }
+
+        .taskcell {
+            cursor: pointer;
+        }
+
+        #task_table {
+            width: 100%;
+        }
+
+        #log_hdr {
+            margin-top: 10px;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            border: none;
+        }
+    </style>
+    <script type="text/javascript" src="tps.js"></script>
+    <script type="text/javascript">
+        //<!CDATA[
+        if (!tps.sys.HasFullPrivilege()) {
+            shellapp.ShellExecute("mshta.exe", thisHTA.commandLine, "", "runas", 1);
+            window.close();
+            document.body.onload = null;
+        }
+
+        var G = {
+            path_conf: tps.sys.GetScriptDir(),
+            path_greensoft: tps.file.FirstExistDir(["d:\\greensoft", "e:\\greensoft", "c:\\greensoft", "d:\\soft", "e:\\soft", "c:\\soft"]) || "d:\\greensoft",
+            env: shell.Environment("Process"),
+            path_autorun: shell.SpecialFolders("Startup"),
+            path_autorun_alluser: shell.SpecialFolders("AllUsersStartup"),
+            UI: { max_cellwidth: 0, cell_columns: 0 }
+        };
+
+        var tasks = [
+            {
+                name: "autostart: autoit",
+                check: function () {
+                    return tps.file.Glob(G.path_autorun, /autoit/i, 1).length > 0 ||
+                           tps.file.Glob(G.path_autorun_alluser, /autoit/i, 1).length > 0;
+                },
+                run: function () {
+                    var dir = G.path_greensoft + "\\autoit";
+                    tps.file.CreateShortcut(G.path_autorun_alluser + "\\autoit.lnk", dir + "\\autoit3.exe", dir, "\"hotkey.au3\"");
+                    Log("write to: " + G.path_autorun_alluser + "\\autoit.lnk");
+                }
+            },
+            {
+                name: "autostart: handyrun",
+                check: function () {
+                    return tps.file.Glob(G.path_autorun, /handyrun/i, 1).length > 0 ||
+                           tps.file.Glob(G.path_autorun_alluser, /handyrun/i, 1).length > 0;
+                },
+                run: function () {
+                    var dir = G.path_greensoft + "\\handyrun";
+                    tps.file.CreateShortcut(G.path_autorun_alluser + "\\handyrun.lnk", dir + "\\handyrun.exe", dir);
+                }
+            },
+            {
+                name: "env: GS",
+                check: function () {
+                    return tps.sys.GetSystemEnv("GS") == G.path_greensoft;
+                },
+                run: function () {
+                    tps.sys.SetSystemEnv("GS", G.path_greensoft, G.env("USERNAME"));
+                }
+            },
+            {
+                name: "autostart: everything",
+                check: function () {
+                    var o = tps.sys.RunCommandAndGetResult("schtasks.exe /query /tn everything").output;
+                    return o.match(/everything/);
+                },
+                run: function () {
+                    var o = tps.sys.RunCommandAndGetResult('schtasks.exe /create /sc ONLOGON /tn everything /tr "cmd.exe /C start %GS%\\everything\\Everything.exe" /rl HIGHEST /F');
+                    alert(o.output ? o.output : o.errors);
+                }
+            },
+
+            {
+                name: "Add g40 to fav"
+            },
+
+            {
+                name: "env: PROMPT"
+            },
+
+            {
+            },
+
+            {
+            },
+
+            {
+            },
+
+            {
+            }
+        ];
+
+        var ops = [];
+
+        function Init() {
+            var args = tps.util.ParseArgument(tps.util.SplitCmdLine(thisHTA.commandLine));
+            for (var i in tasks) {
+                if (tasks[i].name) {
+                    ops.push(tasks[i]);
+                }
+            }
+
+            var tc = document.getElementById("task_c");
+            for (var i in ops) {
+                var op = ops[i];
+                var cell = document.createElement("span");
+                cell.innerText = op.name;
+                cell.className = "taskcell";
+                tc.appendChild(cell);
+                if (G.UI.max_cellwidth < cell.offsetWidth) G.UI.max_cellwidth = cell.offsetWidth;
+                tc.removeChild(cell);
+                op.status = false;
+            }
+
+            window.onresize = OnWindowResize;
+            OnWindowResize();
+
+            Log("Config Path: " + G.path_conf);
+            Log("GS Path:" + G.path_greensoft);
+            Log("User Name:" + G.env("USERNAME"));
+            for (var i in ops) {
+                var op = ops[i];
+                try {
+                    if (op.hasOwnProperty("init")) op.init();
+                    if (op.hasOwnProperty("check")) op.status = op_check(op);
+                    MarkStatus(op.cell, op.status);
+                }
+                catch (e) {
+                    var msg = e;
+                    if (e.hasOwnProperty("message")) msg = e.message;
+                    Log("[$T]: task check failed: $M".replace("$T", op.name).replace("$M", msg));
+                }
+            }
+
+            AddGradientBK(document.getElementById("log_hdr"), "deepskyblue", "#FFFFFF");
+        }
+
+        function OnWindowResize() {
+            RecalcLayout();
+        }
+
+        function RecalcLayout() {
+            var oLog = document.getElementById("log");
+            var tbl = document.getElementById("task_table");
+            var tbl_hdr = document.getElementById("log_hdr");
+            var cols = Math.floor(document.body.offsetWidth / G.UI.max_cellwidth);
+            if (cols < 1) cols = 1;
+            if (cols != G.UI.cell_columns) {
+                G.UI.cell_columns = cols;
+                while (tbl.rows.length > 0) {
+                    tbl.deleteRow(0);
+                }
+
+                var rows = Math.ceil(ops.length / cols);
+                for (var i = 0; i < rows; i++) {
+                    var row = tbl.insertRow(-1);
+                    for (var j = 0; j < cols; j++) {
+                        if (j * rows + i >= ops.length) continue;
+                        var op = ops[j * rows + i];
+                        var cell = row.insertCell(-1);
+                        cell.appendChild(document.createTextNode(op.name));
+                        cell.className = "taskcell";
+                        cell.op = op;
+                        cell.style.width = G.UI.max_cellwidth;
+                        cell.onclick = OnTaskClick;
+                        op.cell = cell;
+                        MarkStatus(cell, op.status);
+                    }
+                }
+            }
+
+            var h = document.body.offsetHeight - tbl.offsetHeight - tbl_hdr.offsetHeight - 40;
+            if (h > 100) {
+                oLog.style.height = h;
+            }
+        }
+
+        function Log(text, style) {
+            if (style == null) style = "";
+            var oLog = document.getElementById("log");
+            oLog.innerHTML += "<span style=\"" + style + "\">" + tps.ui.PlainTextToHTML(text) + "</span>";
+            if (text.charCodeAt(text.length - 1) != 10) {
+                oLog.innerHTML += "<br/>";
+            }
+            oLog.scrollTop += 1000000;
+        }
+        function ClearLog() {
+            document.getElementById("log").innerHTML = "";
+        }
+        function LogEvent(text) {
+            Log(text, "color:blue;");
+        }
+        function AddGradientBK(o, c1, c2, tp) {
+            if (c2 == null) c2 = "#FFFFFF";
+            if (tp == null) tp = 1;
+            o.style.filter = "progid:DXImageTransform.Microsoft.Gradient(GradientType=%tp,StartColorStr='%sc', EndColorStr='%ec')".replace("%sc", c1).replace("%ec", c2).replace("%tp", tp);
+        }
+        function OnTaskClick() {
+            var cell = window.event.srcElement;
+            var op = cell.op;
+            var has_chk_method = op.hasOwnProperty("check");
+            var has_run_method = op.hasOwnProperty("run");
+            if (has_chk_method) {
+                if (has_run_method) {
+                    op_run(op);
+                }
+                op.status = op_check(op);
+            }
+            else {
+                if (op.status) {
+                    if (confirm("Reset this task to undone?")) op.status = false;
+                }
+                else {
+                    if (has_run_method) {
+                        op_run(op);
+                        op.status = confirm("Task done but cannot check...");
+                    }
+                    else {
+                        op.status = confirm("$T: This task must be done manually...".replace("$T", op.name));
+                    }
+                }
+            }
+
+            MarkStatus(cell, cell.op.status);
+        }
+        function op_run(op) {
+            LogEvent("run task: " + op.name);
+            try { op.run(); } catch (e) {
+                var msg = e;
+                if (e.hasOwnProperty("message")) msg = e.message;
+                Log("[$T]: failed. $M".replace("$T", op.name).replace("$M", msg));
+            }
+        }
+        function op_check(op) {
+            LogEvent("check " + op.name);
+            try { return op.check(); } catch (e) {
+                var msg = e;
+                if (e.hasOwnProperty("message")) msg = e.message;
+                Log("task check failed: $M".replace("$T", op.name).replace("$M", msg));
+                return false;
+            }
+        }
+        function MarkStatus(o, c) { AddGradientBK(o, c ? "#CCFFCC" : "#FFCCCC"); }
+        //]]>
+    </script>
+</head>
+<body onload="Init()" onkeydown="if (event.keyCode == 27) window.close()">
+    <table id="frame_tbl" style="width: 100%;">
+        <tr>
+            <td id="task_c">
+                <table id="task_table">
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td style="height: 20px;"></td>
+        </tr>
+        <tr>
+            <td id="log_hdr">OPERATION LOG
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <div id="log" class="logwin">
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
