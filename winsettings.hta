@@ -1,7 +1,7 @@
 ﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <title>Software Environment Confuration Tool</title>
+    <title>Software Environment Configuration Tool</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"></meta>
     <hta:application id="thisHTA" icon="irftp.exe"></hta:application>
     <style type="text/css">
@@ -20,7 +20,7 @@
             width: 100%;
         }
 
-        #log_hdr {
+        #log_header {
             margin-top: 10px;
         }
 
@@ -157,7 +157,7 @@
                 }
             }
 
-            AddGradientBK(document.getElementById("log_hdr"), "deepskyblue", "#FFFFFF");
+            AddGradientBK(document.getElementById("log_header"), "deepskyblue", "#FFFFFF");
         }
 
         function OnWindowResize() {
@@ -167,7 +167,7 @@
         function RecalcLayout() {
             var oLog = document.getElementById("log");
             var tbl = document.getElementById("task_table");
-            var tbl_hdr = document.getElementById("log_hdr");
+            var tbl_hdr = document.getElementById("log_header");
             var cols = Math.floor(document.body.offsetWidth / G.UI.max_cellwidth);
             if (cols < 1) cols = 1;
             if (cols != G.UI.cell_columns) {
@@ -281,7 +281,7 @@
             <td style="height: 20px;"></td>
         </tr>
         <tr>
-            <td id="log_hdr">OPERATION LOG
+            <td id="log_header">OPERATION LOG
             </td>
         </tr>
         <tr>
