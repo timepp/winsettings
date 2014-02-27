@@ -8,11 +8,11 @@
         .logwin {
             padding-left: 5px;
             font-size: small;
-            border: thin solid deepskyblue;
+            border: thin solid blue;
             overflow: auto;
         }
 
-        .taskcell {
+        .task_cell {
             cursor: pointer;
         }
 
@@ -43,6 +43,7 @@
         var G = {
             path_conf: tps.sys.GetScriptDir(),
             path_greensoft: tps.file.FirstExistDir(["d:\\greensoft", "e:\\greensoft", "c:\\greensoft", "d:\\soft", "e:\\soft", "c:\\soft"]) || "d:\\greensoft",
+            path_srcroot: tps.file.FirstExistDir(["c:\\src", "d:\\src", "e:\\src"]) || "d:\\src",
             env: shell.Environment("Process"),
             path_autorun: shell.SpecialFolders("Startup"),
             path_autorun_alluser: shell.SpecialFolders("AllUsersStartup"),
@@ -74,12 +75,12 @@
                 }
             },
             {
-                name: "env: GS",
+                name: "ENV: GS",
                 check: function () {
                     return tps.sys.GetSystemEnv("GS") == G.path_greensoft;
                 },
                 run: function () {
-                    tps.sys.SetSystemEnv("GS", G.path_greensoft, G.env("USERNAME"));
+                    tps.sys.SetSystemEnv("GS", G.path_greensoft);
                 }
             },
             {
@@ -95,17 +96,21 @@
             },
 
             {
-                name: "Add g40 to fav"
+                name: "Add g40 to explorer favorites"
             },
 
             {
-                name: "env: PROMPT"
+                name: "Add %GS%\cmdline to PATH"
             },
 
             {
-            },
-
-            {
+                name: "ENV: SRCROOT",
+                check: function () {
+                    return tps.sys.GetSystemEnv("SRCROOT") != null;
+                },
+                run: function () {
+                    tps.sys.SetSystemEnv("SRCROOT", G.path_srcroot);
+                }
             },
 
             {
@@ -130,7 +135,7 @@
                 var op = ops[i];
                 var cell = document.createElement("span");
                 cell.innerText = op.name;
-                cell.className = "taskcell";
+                cell.className = "task_cell";
                 tc.appendChild(cell);
                 if (G.UI.max_cellwidth < cell.offsetWidth) G.UI.max_cellwidth = cell.offsetWidth;
                 tc.removeChild(cell);
@@ -140,13 +145,13 @@
             window.onresize = OnWindowResize;
             OnWindowResize();
 
-            Log("Config Path: " + G.path_conf);
+            Log("Configuration Path: " + G.path_conf);
             Log("GS Path:" + G.path_greensoft);
             Log("User Name:" + G.env("USERNAME"));
             for (var i in ops) {
                 var op = ops[i];
                 try {
-                    if (op.hasOwnProperty("init")) op.init();
+                    if (op.hasOwnProperty("initialize")) op.initialize();
                     if (op.hasOwnProperty("check")) op.status = op_check(op);
                     MarkStatus(op.cell, op.status);
                 }
@@ -157,7 +162,7 @@
                 }
             }
 
-            AddGradientBK(document.getElementById("log_header"), "deepskyblue", "#FFFFFF");
+            AddGradientBK(document.getElementById("log_header"), "blue", "#FFFFFF");
         }
 
         function OnWindowResize() {
@@ -184,7 +189,7 @@
                         var op = ops[j * rows + i];
                         var cell = row.insertCell(-1);
                         cell.appendChild(document.createTextNode(op.name));
-                        cell.className = "taskcell";
+                        cell.className = "task_cell";
                         cell.op = op;
                         cell.style.width = G.UI.max_cellwidth;
                         cell.onclick = OnTaskClick;

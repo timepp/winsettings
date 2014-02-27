@@ -273,7 +273,7 @@ String.prototype.rtrim = function () {
             return item.VariableValue;
         },
         SetSystemEnv: function (vname, val, login_name) {
-            if (login_name == null) login_name = "<SYSTEM>";
+            if (!login_name) login_name = "<SYSTEM>";
 
             var item = WMI("cimv2").Get("Win32_Environment").SpawnInstance_();
             item.Name = vname;
