@@ -46,6 +46,7 @@
             padding: 0;
             height: 100%;
             border: none;
+            font-family: Verdana;
         }
     </style>
     <script type="text/javascript" src="tps.js"></script>
@@ -146,7 +147,6 @@
             {
                 name: "Add %GS%\cmdline to PATH",
                 check: function () {
-                    debugger;
                     var paths = tps.sys.GetSystemEnv("path").toLowerCase().split(";");
                     return tps.util.IndexOf(paths, G.path_greensoft + "\\cmdline") != -1;
                 },
@@ -158,8 +158,20 @@
                     tps.sys.SetSystemEnv("path", newpathval);
                 }
             },
-
             {
+                name: "Explore view setting",
+                check: function () {
+                    var showHiddenFiles = tps.reg.GetIntValue(HKEY_CURRENT_USER, this.keypath(), "Hidden");
+                    var hideExt = tps.reg.GetIntValue(HKEY_CURRENT_USER, this.keypath(), "HideFileExt");
+                    return (showHiddenFiles == 1 && hideExt == 0);
+                },
+                run: function () {
+                    tps.reg.SetIntValue(HKEY_CURRENT_USER, this.keypath(), "Hidden", 1);
+                    tps.reg.SetIntValue(HKEY_CURRENT_USER, this.keypath(), "HideFileExt", 0);
+                },
+                keypath: function () {
+                    return "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
+                }
             },
 
             {

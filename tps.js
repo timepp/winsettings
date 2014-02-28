@@ -359,24 +359,24 @@ String.prototype.icaseEqual = function (str) {
     };
 
     tps.reg = {
-        GetStringValue: function (root, key, val) {
-            InvokeCommonRegTask("GetStringValue", root, key, val).sValue;
+        GetStringValue: function (root, key, valname) {
+            InvokeCommonRegTask("GetStringValue", root, key, valname).sValue;
         },
         SetStringValue: function (root, key, valname, val) {
             return InvokeCommonRegTask("SetStringValue", root, key, valname, val);
         },
-        GetIntValue: function (root, key, val) {
-            return InvokeCommonRegTask("GetDWORDValue", root, key, val).uValue;
+        GetIntValue: function (root, key, valname) {
+            return InvokeCommonRegTask("GetDWORDValue", root, key, valname).uValue;
         },
         SetIntValue: function (root, key, valname, val) {
             return InvokeCommonRegTask("SetDWORDValue", root, key, valname, val);
         },
-        StringValueExists: function (root, key, val) {
-            var s = GetStringValue(root, key, val);
+        StringValueExists: function (root, key, valname) {
+            var s = GetStringValue(root, key, valname);
             return s != undefined && s != null;
         },
-        IntValueExists: function (root, key, val) {
-            var s = GetIntValue(root, key, val);
+        IntValueExists: function (root, key, valname) {
+            var s = GetIntValue(root, key, valname);
             return s != undefined && s != null;
         },
         OpenRegEdit: function (path) {
