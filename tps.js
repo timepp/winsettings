@@ -29,6 +29,19 @@ String.prototype.ltrim = function () {
 String.prototype.rtrim = function () {
     return this.replace(/\s+$/, "");
 };
+String.prototype.lpad = function (ch, l) {
+    var ret = this;
+    while (ret.length < l) ret = ch + ret;
+    return ret;
+};
+String.prototype.rpad = function (ch, l) {
+    var ret = this;
+    while (ret.length < l) ret += ch;
+    return ret;
+};
+String.prototype.icaseEqual = function (str) {
+    return this.toLowerCase() == str.toLowerCase();
+};
 
 (function () {
 
@@ -59,6 +72,12 @@ String.prototype.rtrim = function () {
         }
         return REG().ExecMethod_(func.Name, param);
     }
+    function LogEvent(text) {
+        tps.log.Log("event", "tps", text);
+    }
+    function LogError(text) {
+        tps.log.Log("error", "tps", text);
+    }
 
     // tps.util ============================================================================================================================
     // tps.util ============================================================================================================================
@@ -81,12 +100,6 @@ String.prototype.rtrim = function () {
                 o[key] = p[key];
             }
         },
-        IndexOf: function (arr, x) {
-            for (var i = 0; i < arr.length; i++) {
-                if (arr[i] == x) return i;
-            }
-            return -1;
-        },
         SubObject: function () {
             var obj = arguments[0];
             for (var i = 1; i < arguments.length; i++) {
@@ -96,6 +109,18 @@ String.prototype.rtrim = function () {
                 obj = obj[pn];
             }
             return obj;
+        },
+        IndexOf: function (arr, obj, fromIndex) {
+            if (fromIndex == null) {
+                fromIndex = 0;
+            } else if (fromIndex < 0) {
+                fromIndex = Math.max(0, arr.length + fromIndex);
+            }
+            for (var i = fromIndex, j = arr.length; i < j; i++) {
+                if (arr[i] === obj)
+                    return i;
+            }
+            return -1;
         },
         // group array to map by some properties
         // arr: Array of Objects
@@ -120,7 +145,7 @@ String.prototype.rtrim = function () {
         },
         FormatDateString: function (dt, fmt) {
             var ret = "";
-            var D2 = function (n) { if (n < 10) return "0" + n.toString(); return n.toString(); };
+            var D2 = function (n) { return n.toString().lpad("0", 2); };
             for (var i = 0; i < fmt.length; i++) {
                 var c = fmt.charAt(i);
                 if (c == "Y") ret += dt.getFullYear();
@@ -129,6 +154,7 @@ String.prototype.rtrim = function () {
                 else if (c == "H") ret += D2(dt.getHours());
                 else if (c == "M") ret += D2(dt.getMinutes());
                 else if (c == "S") ret += D2(dt.getSeconds());
+                else if (c == "I") ret += dt.getMilliseconds().toString().lpad('0', 3);
                 else ret += c;
             }
             return ret;
@@ -266,14 +292,23 @@ String.prototype.rtrim = function () {
         GetScriptDir: function () {
             return tps.file.GetDir(tps.sys.GetScriptPath());
         },
-        GetSystemEnv: function (vname) {
+        GetSystemEnv: function (vname, login_name) {
             var items = WMI("cimv2").ExecQuery("Select * from Win32_Environment Where Name = '$V'".replace("$V", vname));
             if (!items || items.Count == 0) return null;
-            var item = new Enumerator(items).item();
-            return item.VariableValue;
+            var itemEnum = new Enumerator(items);
+            for (itemEnum.moveFirst() ; !itemEnum.atEnd() ; itemEnum.moveNext()){
+                var envvar = itemEnum.item();
+                if (envvar.Name.icaseEqual(vname) && (!login_name || login_name == envvar.Username)) {
+                    return envvar.VariableValue;
+                }
+            }
+
+            return null;
         },
         SetSystemEnv: function (vname, val, login_name) {
             if (!login_name) login_name = "<SYSTEM>";
+
+            LogEvent("Set system environment: " + vname + "=" + val + ", user=" + login_name);
 
             var item = WMI("cimv2").Get("Win32_Environment").SpawnInstance_();
             item.Name = vname;
@@ -286,6 +321,7 @@ String.prototype.rtrim = function () {
             tps.sys.RunCommandAndGetResult(tps.sys.GetScriptDir() + "\\tpkit.exe --action=BroadcastEnvironmentChange");
         },
         SetEnv: function (name, val) {
+            LogEvent("Set process environment: " + name + "=" + val);
             if (val == null) {
                 env.Remove(name);
             }
@@ -306,7 +342,7 @@ String.prototype.rtrim = function () {
             } catch (e) { }
 
             cmdline = "cmd.exe /C " + cmdline + ' > "OUT" 2> "ERR"'.replace("OUT", outfile).replace("ERR", errfile);
-            Log("RUN:[" + cmdline + "]");
+            LogEvent("Run command: " + cmdline);
             shell.Run(cmdline, 0, true);
             var ret = {
                 output: tps.file.ReadTextFileSimple(outfile),
@@ -471,6 +507,7 @@ String.prototype.rtrim = function () {
             oLnk.Arguments = argument;
             oLnk.Description = desc;
             oLnk.Save();
+            LogEvent("Create link: " + lnkPath + " ==> " + targetPath);
         },
         ReadTextFileSimple: function (filename) {
             var content = "";
@@ -590,6 +627,34 @@ String.prototype.rtrim = function () {
                 if (fso.FolderExists(lst[i])) return lst[i];
             }
             return null;
+        }
+    };
+    tps.log = {
+        devices: [],
+        indent: 0,
+        Log: function (level, tag, text) {
+            var dt = new Date();
+            for (var i in this.devices) {
+                this.devices[i].WriteLog(level, tag, dt, this.indent, text);
+            }
+        },
+        Debug: function (text) {
+            tps.log.Log("debug", "", text);
+        },
+        Event: function (text) {
+            tps.log.Log("event", "", text);
+        },
+        Warning: function(text) {
+            tps.log.Log("warning", "", text);
+        },
+        Error: function(text) {
+            tps.log.Log("error", "", text);
+        },
+        Indent: function () {
+            this.indent++;
+        },
+        Unindent: function () {
+            this.indent--;
         }
     };
     tps.unittest = {

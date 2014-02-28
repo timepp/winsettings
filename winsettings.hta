@@ -8,12 +8,29 @@
         .logwin {
             padding-left: 5px;
             font-size: small;
-            border: thin solid blue;
+            font-family: monospace;
+            border: thin solid skyblue;
             overflow: auto;
         }
 
         .task_cell {
             cursor: pointer;
+        }
+
+        .log_debug {
+            color: gray;
+        }
+
+        .log_event {
+            color: blue;
+        }
+
+        .log_warning {
+            color: darkorange;
+        }
+
+        .log_error {
+            color: red;
         }
 
         #task_table {
@@ -44,10 +61,16 @@
             path_conf: tps.sys.GetScriptDir(),
             path_greensoft: tps.file.FirstExistDir(["d:\\greensoft", "e:\\greensoft", "c:\\greensoft", "d:\\soft", "e:\\soft", "c:\\soft"]) || "d:\\greensoft",
             path_srcroot: tps.file.FirstExistDir(["c:\\src", "d:\\src", "e:\\src"]) || "d:\\src",
-            env: shell.Environment("Process"),
+            username: shell.Environment("Process")("USERNAME"),
+            path_profile: shell.Environment("Process")("USERPROFILE"),
             path_autorun: shell.SpecialFolders("Startup"),
-            path_autorun_alluser: shell.SpecialFolders("AllUsersStartup"),
-            UI: { max_cellwidth: 0, cell_columns: 0 }
+            path_autorun_alluser: shell.SpecialFolders("AllUsersStartup")
+        };
+        G.path_softconf = G.path_profile + "\\SkyDrive\\softconf";
+
+        var GUI = {
+            max_cellwidth: 0,
+            cell_columns: 0
         };
 
         var tasks = [
@@ -60,7 +83,6 @@
                 run: function () {
                     var dir = G.path_greensoft + "\\autoit";
                     tps.file.CreateShortcut(G.path_autorun_alluser + "\\autoit.lnk", dir + "\\autoit3.exe", dir, "\"hotkey.au3\"");
-                    Log("write to: " + G.path_autorun_alluser + "\\autoit.lnk");
                 }
             },
             {
@@ -75,15 +97,6 @@
                 }
             },
             {
-                name: "ENV: GS",
-                check: function () {
-                    return tps.sys.GetSystemEnv("GS") == G.path_greensoft;
-                },
-                run: function () {
-                    tps.sys.SetSystemEnv("GS", G.path_greensoft);
-                }
-            },
-            {
                 name: "autostart: everything",
                 check: function () {
                     var o = tps.sys.RunCommandAndGetResult("schtasks.exe /query /tn everything").output;
@@ -94,15 +107,15 @@
                     alert(o.output ? o.output : o.errors);
                 }
             },
-
             {
-                name: "Add g40 to explorer favorites"
+                name: "ENV: GS",
+                check: function () {
+                    return tps.sys.GetSystemEnv("GS") == G.path_greensoft;
+                },
+                run: function () {
+                    tps.sys.SetSystemEnv("GS", G.path_greensoft);
+                }
             },
-
-            {
-                name: "Add %GS%\cmdline to PATH"
-            },
-
             {
                 name: "ENV: SRCROOT",
                 check: function () {
@@ -110,6 +123,39 @@
                 },
                 run: function () {
                     tps.sys.SetSystemEnv("SRCROOT", G.path_srcroot);
+                }
+            },
+            {
+                name: "ENV: SOFTCONF",
+                check: function () {
+                    return tps.sys.GetSystemEnv("SOFTCONF") != null;
+                },
+                run: function () {
+                    tps.sys.SetSystemEnv("SOFTCONF", G.path_softconf);
+                }
+            },
+            {
+                name: "Add G40 to explorer favorites",
+                check: function () {
+                    return tps.file.Glob(G.path_profile + "\\Links", /G40/i, 1).length > 0;
+                },
+                run: function () {
+                    tps.file.CreateShortcut(G.path_profile + "\\Links\\G40.lnk", "\\\\stcsrv-g40\\Share\\tongjunhui");
+                }
+            },
+            {
+                name: "Add %GS%\cmdline to PATH",
+                check: function () {
+                    debugger;
+                    var paths = tps.sys.GetSystemEnv("path").toLowerCase().split(";");
+                    return tps.util.IndexOf(paths, G.path_greensoft + "\\cmdline") != -1;
+                },
+                run: function () {
+                    var pathval = tps.sys.GetSystemEnv("path");
+                    var newpathval = pathval;
+                    if (newpathval.slice(-1) != ";") newpathval += ";";
+                    newpathval += G.path_greensoft + "\\cmdline";
+                    tps.sys.SetSystemEnv("path", newpathval);
                 }
             },
 
@@ -122,7 +168,23 @@
 
         var ops = [];
 
+        var spanLogDevice = {
+            WriteLog: function (level, tag, dt, indent, text) {
+                var oLog = document.getElementById("log");
+                var oLine = document.createElement("span");
+                var timestring = tps.util.FormatDateString(dt, "H:M:S.I");
+                var finaltext = timestring + " " + "".lpad(" ", indent * 2) + text;
+                oLine.appendChild(document.createTextNode(finaltext));
+                oLine.appendChild(document.createElement("br"));
+                oLine.className = "log_" + level;
+                oLog.appendChild(oLine);
+                oLog.scrollTop += 1000000;
+            }
+        };
+
         function Init() {
+            tps.log.devices.push(spanLogDevice);
+
             var args = tps.util.ParseArgument(tps.util.SplitCmdLine(thisHTA.commandLine));
             for (var i in tasks) {
                 if (tasks[i].name) {
@@ -137,7 +199,7 @@
                 cell.innerText = op.name;
                 cell.className = "task_cell";
                 tc.appendChild(cell);
-                if (G.UI.max_cellwidth < cell.offsetWidth) G.UI.max_cellwidth = cell.offsetWidth;
+                if (GUI.max_cellwidth < cell.offsetWidth) GUI.max_cellwidth = cell.offsetWidth;
                 tc.removeChild(cell);
                 op.status = false;
             }
@@ -145,9 +207,13 @@
             window.onresize = OnWindowResize;
             OnWindowResize();
 
-            Log("Configuration Path: " + G.path_conf);
-            Log("GS Path:" + G.path_greensoft);
-            Log("User Name:" + G.env("USERNAME"));
+            tps.log.Debug("System Information: ");
+            tps.log.Indent();
+            for (var x in G) {
+                tps.log.Debug(x + ": " + G[x]);
+            }
+            tps.log.Unindent();
+
             for (var i in ops) {
                 var op = ops[i];
                 try {
@@ -158,11 +224,11 @@
                 catch (e) {
                     var msg = e;
                     if (e.hasOwnProperty("message")) msg = e.message;
-                    Log("[$T]: task check failed: $M".replace("$T", op.name).replace("$M", msg));
+                    tps.log.Warning("[$T]: task check failed: $M".replace("$T", op.name).replace("$M", msg));
                 }
             }
 
-            AddGradientBK(document.getElementById("log_header"), "blue", "#FFFFFF");
+            AddGradientBK(document.getElementById("log_header"), "skyblue", "#FFFFFF");
         }
 
         function OnWindowResize() {
@@ -173,10 +239,10 @@
             var oLog = document.getElementById("log");
             var tbl = document.getElementById("task_table");
             var tbl_hdr = document.getElementById("log_header");
-            var cols = Math.floor(document.body.offsetWidth / G.UI.max_cellwidth);
+            var cols = Math.floor(document.body.offsetWidth / GUI.max_cellwidth);
             if (cols < 1) cols = 1;
-            if (cols != G.UI.cell_columns) {
-                G.UI.cell_columns = cols;
+            if (cols != GUI.cell_columns) {
+                GUI.cell_columns = cols;
                 while (tbl.rows.length > 0) {
                     tbl.deleteRow(0);
                 }
@@ -191,7 +257,7 @@
                         cell.appendChild(document.createTextNode(op.name));
                         cell.className = "task_cell";
                         cell.op = op;
-                        cell.style.width = G.UI.max_cellwidth;
+                        cell.style.width = GUI.max_cellwidth;
                         cell.onclick = OnTaskClick;
                         op.cell = cell;
                         MarkStatus(cell, op.status);
@@ -205,20 +271,8 @@
             }
         }
 
-        function Log(text, style) {
-            if (style == null) style = "";
-            var oLog = document.getElementById("log");
-            oLog.innerHTML += "<span style=\"" + style + "\">" + tps.ui.PlainTextToHTML(text) + "</span>";
-            if (text.charCodeAt(text.length - 1) != 10) {
-                oLog.innerHTML += "<br/>";
-            }
-            oLog.scrollTop += 1000000;
-        }
         function ClearLog() {
             document.getElementById("log").innerHTML = "";
-        }
-        function LogEvent(text) {
-            Log(text, "color:blue;");
         }
         function AddGradientBK(o, c1, c2, tp) {
             if (c2 == null) c2 = "#FFFFFF";
@@ -254,21 +308,28 @@
             MarkStatus(cell, cell.op.status);
         }
         function op_run(op) {
-            LogEvent("run task: " + op.name);
+            tps.log.Event("run task: " + op.name);
+            tps.log.Indent();
             try { op.run(); } catch (e) {
                 var msg = e;
                 if (e.hasOwnProperty("message")) msg = e.message;
-                Log("[$T]: failed. $M".replace("$T", op.name).replace("$M", msg));
+                tps.log.Warning("[$T]: failed. $M".replace("$T", op.name).replace("$M", msg));
             }
+            tps.log.Unindent();
         }
         function op_check(op) {
-            LogEvent("check " + op.name);
-            try { return op.check(); } catch (e) {
+            tps.log.Event("check " + op.name);
+            tps.log.Indent();
+            var ret = false;
+            try {
+                ret = op.check();
+            } catch (e) {
                 var msg = e;
                 if (e.hasOwnProperty("message")) msg = e.message;
-                Log("task check failed: $M".replace("$T", op.name).replace("$M", msg));
-                return false;
+                tps.log.Error("task check failed: $M".replace("$T", op.name).replace("$M", msg));
             }
+            tps.log.Unindent();
+            return ret;
         }
         function MarkStatus(o, c) { AddGradientBK(o, c ? "#CCFFCC" : "#FFCCCC"); }
         //]]>
