@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <title>Software Environment Configuration Tool</title>
@@ -104,7 +104,7 @@
                     return o.match(/everything/);
                 },
                 run: function () {
-                    var o = tps.sys.RunCommandAndGetResult('schtasks.exe /create /sc ONLOGON /tn everything /tr "cmd.exe /C start %GS%\\everything\\Everything.exe" /rl HIGHEST /F');
+                    var o = tps.sys.RunCommandAndGetResult('schtasks.exe /create /sc ONLOGON /tn everything /RU Administrators /tr "cmd.exe /C start %GS%\\everything\\Everything.exe" /rl HIGHEST /F');
                     alert(o.output ? o.output : o.errors);
                 }
             },
@@ -141,7 +141,7 @@
                     return tps.file.Glob(G.path_profile + "\\Links", /G40/i, 1).length > 0;
                 },
                 run: function () {
-                    tps.file.CreateShortcut(G.path_profile + "\\Links\\G40.lnk", "\\\\stcsrv-g40\\Share\\tongjunhui");
+                    tps.file.CreateShortcut(G.path_profile + "\\Links\\G40.lnk", "\\\\stcsrv-g40.fareast.corp.microsoft.com\\Share\\tongjunhui");
                 }
             },
             {
