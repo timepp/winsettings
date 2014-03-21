@@ -83,7 +83,7 @@
                 },
                 run: function () {
                     var dir = G.path_greensoft + "\\autoit";
-                    tps.file.CreateShortcut(G.path_autorun_alluser + "\\autoit.lnk", dir + "\\autoit3.exe", dir, "\"hotkey.au3\"");
+                    tps.file.CreateShortcut(G.path_autorun_alluser + "\\autoit.lnk", dir + "\\autoit3.exe", dir, "\"%softconf%\\hotkey.au3\"");
                 }
             },
             {
@@ -105,6 +105,17 @@
                 },
                 run: function () {
                     var o = tps.sys.RunCommandAndGetResult('schtasks.exe /create /sc ONLOGON /tn everything /RU Administrators /tr "cmd.exe /C start %GS%\\everything\\Everything.exe" /rl HIGHEST /F');
+                    alert(o.output ? o.output : o.errors);
+                }
+            },
+            {
+                name: "autostart: mactype",
+                check: function () {
+                    var o = tps.sys.RunCommandAndGetResult("schtasks.exe /query /tn mactype").output;
+                    return o.match(/mactype/);
+                },
+                run: function () {
+                    var o = tps.sys.RunCommandAndGetResult('schtasks.exe /create /sc ONLOGON /tn mactype /tr "cmd.exe /C start %GS%\\mactype\\MacTray.exe" /rl HIGHEST /F');
                     alert(o.output ? o.output : o.errors);
                 }
             },
@@ -147,15 +158,19 @@
             {
                 name: "Add %GS%\cmdline to PATH",
                 check: function () {
-                    var paths = tps.sys.GetSystemEnv("path").toLowerCase().split(";");
-                    return tps.util.IndexOf(paths, G.path_greensoft + "\\cmdline") != -1;
+                    return tps.sys.InPath(G.path_greensoft + "\\cmdline");
                 },
                 run: function () {
-                    var pathval = tps.sys.GetSystemEnv("path");
-                    var newpathval = pathval;
-                    if (newpathval.slice(-1) != ";") newpathval += ";";
-                    newpathval += G.path_greensoft + "\\cmdline";
-                    tps.sys.SetSystemEnv("path", newpathval);
+                    tps.sys.AddToPath(G.path_greensoft + "\\cmdline");
+                }
+            },
+            {
+                name: "Add %GS%\cygwin\bin to PATH",
+                check: function () {
+                    return tps.sys.InPath(G.path_greensoft + "\\cygwin\\bin");
+                },
+                run: function () {
+                    tps.sys.AddToPath(G.path_greensoft + "\\cygwin\\bin");
                 }
             },
             {
@@ -172,6 +187,12 @@
                 keypath: function () {
                     return "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
                 }
+            },
+            {
+                name: "Install 7zip"
+            },
+            {
+                name: "Install git"
             },
 
             {
