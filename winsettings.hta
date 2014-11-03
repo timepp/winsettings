@@ -1,4 +1,4 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <title>Software Environment Configuration Tool</title>
@@ -52,12 +52,7 @@
     <script type="text/javascript" src="tps.js"></script>
     <script type="text/javascript">
         //<!CDATA[
-        if (!tps.sys.HasFullPrivilege()) {
-            shellapp.ShellExecute("mshta.exe", thisHTA.commandLine, "", "runas", 1);
-            window.close();
-            document.body.onload = null;
-        }
-
+        tps.sys.RestartHTA(thisHTA.commandLine, false, true);
         var G = {
             path_conf: tps.sys.GetScriptDir(),
             path_greensoft: tps.file.FirstExistDir(["d:\\greensoft", "e:\\greensoft", "c:\\greensoft", "d:\\soft", "e:\\soft", "c:\\soft"]) || "d:\\greensoft",
@@ -67,7 +62,7 @@
             path_autorun: shell.SpecialFolders("Startup"),
             path_autorun_alluser: shell.SpecialFolders("AllUsersStartup")
         };
-        G.path_softconf = G.path_profile + "\\SkyDrive\\softconf";
+        G.path_softconf = G.path_profile + "\\OneDrive\\softconf";
 
         var GUI = {
             max_cellwidth: 0,
@@ -189,13 +184,63 @@
                 }
             },
             {
-                name: "Install 7zip"
+                name: "Install 7zip",
+                check: function () {
+                    var val = tps.reg.GetStringValue(HKEY_CLASSES_ROOT, "*\\shellex\\ContextMenuHandlers\\7-Zip", "");
+                    return val != null;
+                }
             },
             {
-                name: "Install git"
+                name: "Install Git",
+                check: function () {
+                    var val = tps.reg.GetStringValue(HKEY_CLASSES_ROOT, "*\\shellex\\ContextMenuHandlers\\TortoiseGit", "");
+                    return val != null;
+                }
             },
 
             {
+                // if we meet any of MSGOTHIC.TTC, MSJH.TTC, MSYH.TTC but haven't meet target CN font, we insert it
+                name: "Set Font Link",
+                check: function () {
+                    var fonts = tps.reg.EnumValues(this.keyroot(), this.keypath());
+                    for (var i in fonts) {
+                        var font = fonts[i];
+                        var val = tps.reg.GetMultiStringValue(this.keyroot(), this.keypath(), font);
+                        for (var j in val) {
+                            if (val[j].beginWithOneOf(this.targetFont())) break;
+                            if (val[j].beginWithOneOf(this.cnFont())) return false;
+                        }
+                    }
+                    return true;
+                },
+                run: function() {
+                    var fonts = tps.reg.EnumValues(this.keyroot(), this.keypath());
+                    for (var i in fonts) {
+                        var font = fonts[i];
+                        var val = tps.reg.GetMultiStringValue(this.keyroot(), this.keypath(), font);
+                        for (var j in val) {
+                            if (val[j].beginWithOneOf(this.targetFont())) break;
+                            if (val[j].beginWithOneOf(this.cnFont())) {
+                                val.splice.apply(val, [j, 0].concat(this.targetFont()));
+                                tps.log.Event("processing font: " + font);
+                                tps.reg.SetMultiStringValue(this.keyroot(), this.keypath(), font, val);
+                                break;
+                            }
+                        }
+                    }
+                },
+                keypath: function() {
+                    return "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\FontLink\\SystemLink";
+                },
+                keyroot: function() {
+                    return HKEY_CURRENT_USER;
+                },
+                cnFont: function () {
+                    return ["msgothic.ttc", "msjh.ttc", "msyh.ttc"];
+                },
+                targetFont: function () {
+                    return ["XHEI.TTC,XHei,128,96", "XHEI.TTC,XHei"];
+                }
             }
         ];
 

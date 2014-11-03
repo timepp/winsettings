@@ -42,6 +42,12 @@ String.prototype.rpad = function (ch, l) {
 String.prototype.icaseEqual = function (str) {
     return this.toLowerCase() == str.toLowerCase();
 };
+String.prototype.beginWithOneOf = function (arr) {
+    for (var i in arr) {
+        if (this.toLowerCase().indexOf(arr[i].toLowerCase()) >= 0) return true;
+    }
+    return false;
+},
 
 (function () {
 
@@ -72,12 +78,7 @@ String.prototype.icaseEqual = function (str) {
         }
         return REG().ExecMethod_(func.Name, param);
     }
-    function LogEvent(text) {
-        tps.log.Log("event", "tps", text);
-    }
-    function LogError(text) {
-        tps.log.Log("error", "tps", text);
-    }
+
 
     // tps.util ============================================================================================================================
     // tps.util ============================================================================================================================
@@ -273,6 +274,32 @@ String.prototype.icaseEqual = function (str) {
             }
             return true;
         },
+		RestartHTA: function (cmdline, requestAdmin, escapeWOW64) {
+		    var mshta = "mshta.exe";
+		    var verb = "open";
+		    var needRestart = false;
+		    if (escapeWOW64) {
+		        var sysnativePath = shell.ExpandEnvironmentStrings("%windir%\\sysnative");
+		        if (fso.FolderExists(sysnativePath)) {
+		            mshta = sysnativePath + "\\mshta.exe";
+		            needRestart = true;
+		        }
+		    }
+		    if (requestAdmin) {
+		        if (!tps.sys.HasFullPrivilege()) {
+		            verb = "runas";
+		            mshta = "mshta.exe";
+		            needRestart = true;
+		        }
+		    }
+		    if (needRestart) {
+		        shellapp.ShellExecute(mshta, cmdline, "", verb, 1);
+		        window.close();
+		        body.onload = null;
+		        return true;
+		    }
+		    return false;
+		},
         IsAdmin: function () {
             var oNet = new ActiveXObject("WScript.Network");
             var oGroup = GetObject("WinNT://./Administrators");
@@ -308,7 +335,6 @@ String.prototype.icaseEqual = function (str) {
         SetSystemEnv: function (vname, val, login_name) {
             if (!login_name) login_name = "<SYSTEM>";
 
-            LogEvent("Set system environment: " + vname + "=" + val + ", user=" + login_name);
 
             var item = WMI("cimv2").Get("Win32_Environment").SpawnInstance_();
             item.Name = vname;
@@ -321,7 +347,6 @@ String.prototype.icaseEqual = function (str) {
             tps.sys.RunCommandAndGetResult(tps.sys.GetScriptDir() + "\\tpkit.exe --action=BroadcastEnvironmentChange");
         },
         SetEnv: function (name, val) {
-            LogEvent("Set process environment: " + name + "=" + val);
             if (val == null) {
                 env.Remove(name);
             }
@@ -355,7 +380,6 @@ String.prototype.icaseEqual = function (str) {
             } catch (e) { }
 
             cmdline = "cmd.exe /C " + cmdline + ' > "OUT" 2> "ERR"'.replace("OUT", outfile).replace("ERR", errfile);
-            LogEvent("Run command: " + cmdline);
             shell.Run(cmdline, 0, true);
             var ret = {
                 output: tps.file.ReadTextFileSimple(outfile),
@@ -372,25 +396,85 @@ String.prototype.icaseEqual = function (str) {
     };
 
     tps.reg = {
-        GetStringValue: function (root, key, valname) {
-            InvokeCommonRegTask("GetStringValue", root, key, valname).sValue;
-        },
+	    InvokeCommonRegTask: function (cmd, root, key, valname, val) {
+	        var func = REG().Methods_.Item(cmd);
+	        var param = func.InParameters.SpawnInstance_();
+	        param.hDefKey = root;
+	        param.sSubKeyName = key;
+	        try {
+	            param.sValueName = valname;
+	            if (val != null) {
+	                if (typeof (val) == "string") param.sValue = val;
+	                else if (typeof (val) == "array") param.sValue = val;
+	                else param.uValue = val;
+	            }
+	        } catch (e) { }
+	        return REG().ExecMethod_(func.Name, param);
+	    },
+		GetStringValue: function (root, key, val) {
+			return tps.reg.InvokeCommonRegTask("GetStringValue", root, key, val).sValue;
+		},
+		GetMultiStringValue: function (root, key, val) {
+		    var ret = tps.reg.InvokeCommonRegTask("GetMultiStringValue", root, key, val);
+		    return ret.sValue.toArray();
+		},
         SetStringValue: function (root, key, valname, val) {
-            return InvokeCommonRegTask("SetStringValue", root, key, valname, val);
+		    return tps.reg.InvokeCommonRegTask("SetStringValue", root, key, valname, val);
         },
-        GetIntValue: function (root, key, valname) {
-            return InvokeCommonRegTask("GetDWORDValue", root, key, valname).uValue;
+        SetMultiStringValue: function (root, key, valname, val) {
+            return tps.reg.InvokeCommonRegTask("SetMultiStringValue", root, key, valname, val);
+        },
+		GetIntValue: function (root, key, val) {
+		    return tps.reg.InvokeCommonRegTask("GetDWORDValue", root, key, val).uValue;
         },
         SetIntValue: function (root, key, valname, val) {
-            return InvokeCommonRegTask("SetDWORDValue", root, key, valname, val);
+		    return tps.reg.InvokeCommonRegTask("SetDWORDValue", root, key, valname, val);
         },
-        StringValueExists: function (root, key, valname) {
-            var s = GetStringValue(root, key, valname);
+		GetBoolValue: function (root, key, val) {
+		    return tps.reg.GetIntValue(root, key, val) > 0 ? true : false;
+		},
+		SetBoolValue: function (root, key, valname, val) {
+		    return tps.reg.SetIntValue(root, key, valname, val ? 1 : 0);
+		},
+		StringValueExists: function (root, key, val) {
+			var s = GetStringValue(root, key, val);
             return s != undefined && s != null;
         },
-        IntValueExists: function (root, key, valname) {
-            var s = GetIntValue(root, key, valname);
+		IntValueExists: function (root, key, val) {
+			var s = GetIntValue(root, key, val);
             return s != undefined && s != null;
+		},
+		CreateKey: function (root, key) {
+		    return tps.reg.InvokeCommonRegTask("CreateKey", root, key, null, null);
+		},
+		DeleteKey: function (root, key) {
+		    return tps.reg.InvokeCommonRegTask("DeleteKey", root, key, null, null);
+		},
+		EnumValues: function (root, key) {
+		    var s = tps.reg.InvokeCommonRegTask("EnumValues", root, key, null, null);
+		    var ret = [];
+		    try {
+		        ret = s.sNames.toArray();
+		    } catch (e) { }
+		    return ret;
+		},
+		EnumKeys: function (root, key) {
+		    var s = tps.reg.InvokeCommonRegTask("EnumKey", root, key, null, null);
+		    var ret = [];
+		    try {
+		        ret = s.sNames.toArray();
+		    } catch (e) { }
+		    return ret;
+		},
+		BatchGetStringValues: function (root, key, subkeys, valname) {
+		    var keys = tps.reg.EnumKeys(root, key);
+		    var values = [];
+		    if (subkeys == null) subkeys = ""; else subkeys = subkeys + "\\";
+		    for (var i = 0; i < keys.length; i++) {
+		        var val = tps.reg.GetStringValue(root, key + "\\" + keys[i] + "\\" + subkeys, valname);
+		        values.push(val);
+		    }
+		    return values;
         },
         OpenRegEdit: function (path) {
             tps.reg.SetStringValue(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Applets\\Regedit", "LastKey", path);
@@ -520,7 +604,6 @@ String.prototype.icaseEqual = function (str) {
             oLnk.Arguments = argument;
             oLnk.Description = desc;
             oLnk.Save();
-            LogEvent("Create link: " + lnkPath + " ==> " + targetPath);
         },
         ReadTextFileSimple: function (filename) {
             var content = "";
@@ -594,6 +677,10 @@ String.prototype.icaseEqual = function (str) {
             if (dir == path) dir = ".";
             return dir;
         },
+		GetFileName: function (path) {
+		    var fn = path.replace(/^.*[\\/]([^\\/]+)$/, "$1");
+		    return fn;
+		},
         CreateFromTemplate: function (tfile, ofile, map, encoding) {
             if (!encoding) encoding = "UTF-8";
 
