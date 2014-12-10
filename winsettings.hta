@@ -46,13 +46,13 @@
             padding: 0;
             height: 100%;
             border: none;
-            font-family: Verdana;
+            font-family: Courier New,Segoe UI,Verdana;
         }
     </style>
     <script type="text/javascript" src="tps.js"></script>
     <script type="text/javascript">
         //<!CDATA[
-        tps.sys.RestartHTA(thisHTA.commandLine, false, true);
+        tps.sys.RestartHTA(thisHTA.commandLine, true, true);
         var G = {
             path_conf: tps.sys.GetScriptDir(),
             path_greensoft: tps.file.FirstExistDir(["d:\\greensoft", "e:\\greensoft", "c:\\greensoft", "d:\\soft", "e:\\soft", "c:\\soft"]) || "d:\\greensoft",
@@ -68,6 +68,45 @@
             max_cellwidth: 0,
             cell_columns: 0
         };
+
+        function SimpleRegistryTask(name, values) {
+            values = [].concat(values);
+            this.name = name;
+            this.check = function () {
+                for (var i in values) {
+                    var v = values[i];
+                    if (v.val == null) {
+                        if (tps.reg.GetStringValue(v.root, v.key, v.valname) == null &&
+                            tps.reg.GetIntValue(v.root, v.key, v.valname) == null)
+                            return false;
+                    }
+                    else if (typeof v.val === 'string') {
+                        if (v.val != tps.reg.GetStringValue(v.root, v.key, v.valname)) return false;
+                    } else {
+                        if (v.val != tps.reg.GetIntValue(v.root, v.key, v.valname)) return false;
+                    }
+                }
+                return true;
+            };
+            this.run = function () {
+                var uncomplete = false;
+                for (var i in values) {
+                    var v = values[i];
+                    tps.reg.CreateKey(v.root, v.key);
+                    if (v.val == null) {
+                        uncomplete = true;
+                    }
+                    else if (typeof v.val === 'string') {
+                        tps.reg.SetStringValue(v.root, v.key, v.valname, v.val);
+                    } else {
+                        tps.reg.SetIntValue(v.root, v.key, v.valname, v.val);
+                    }
+                }
+                if (uncomplete) {
+                    alert("manual configuration still needed.");
+                }
+            };
+        }
 
         var tasks = [
             {
@@ -142,7 +181,7 @@
                 }
             },
             {
-                name: "Add G40 to explorer favorites",
+                name: "Explorer favorites",
                 check: function () {
                     return tps.file.Glob(G.path_profile + "\\Links", /G40/i, 1).length > 0;
                 },
@@ -168,35 +207,67 @@
                     tps.sys.AddToPath(G.path_greensoft + "\\cygwin\\bin");
                 }
             },
-            {
-                name: "Explore view setting",
-                check: function () {
-                    var showHiddenFiles = tps.reg.GetIntValue(HKEY_CURRENT_USER, this.keypath(), "Hidden");
-                    var hideExt = tps.reg.GetIntValue(HKEY_CURRENT_USER, this.keypath(), "HideFileExt");
-                    return (showHiddenFiles == 1 && hideExt == 0);
+
+            new SimpleRegistryTask("Explore view setting", [
+                {
+                    root: HKEY_CURRENT_USER,
+                    key: "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+                    valname: "Hidden",
+                    val: 1
                 },
-                run: function () {
-                    tps.reg.SetIntValue(HKEY_CURRENT_USER, this.keypath(), "Hidden", 1);
-                    tps.reg.SetIntValue(HKEY_CURRENT_USER, this.keypath(), "HideFileExt", 0);
-                },
-                keypath: function () {
-                    return "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
+                {
+                    root: HKEY_CURRENT_USER,
+                    key: "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+                    valname: "HideFileExt",
+                    val: 0
                 }
-            },
-            {
-                name: "Install 7zip",
-                check: function () {
-                    var val = tps.reg.GetStringValue(HKEY_CLASSES_ROOT, "*\\shellex\\ContextMenuHandlers\\7-Zip", "");
-                    return val != null;
+                ]),
+
+            new SimpleRegistryTask("Install 7zip",
+                {
+                    root: HKEY_CLASSES_ROOT,
+                    key: "*\\shellex\\ContextMenuHandlers\\7-Zip",
+                    valname: "",
+                    val: null
                 }
-            },
-            {
-                name: "Install Git",
-                check: function () {
-                    var val = tps.reg.GetStringValue(HKEY_CLASSES_ROOT, "*\\shellex\\ContextMenuHandlers\\TortoiseGit", "");
-                    return val != null;
+             ),
+
+            new SimpleRegistryTask("Install Git",
+                {
+                    root: HKEY_CLASSES_ROOT,
+                    key: "*\\shellex\\ContextMenuHandlers\\TortoiseGit",
+                    valname: "",
+                    val: null
                 }
-            },
+             ),
+
+            new SimpleRegistryTask("Disable shell hotkeys", 
+                {
+                    root: HKEY_CURRENT_USER,
+                    key: "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+                    valname: "DisabledHotKeys",
+                    val: "wq"
+                }
+             ),
+
+             new SimpleRegistryTask("Emacs context menu",
+                {
+                    root: HKEY_CLASSES_ROOT,
+                    key: "*\\shell\\Open With Emacs\\command",
+                    valname: "",
+                    val: "wscript.exe \"%GS%\\emacs\\emacs.wsf\" -n -- \"%1\"".replace("%GS%", G.path_greensoft)
+                }
+             ),
+
+             new SimpleRegistryTask("DisableAeroShake",
+                 {
+                     root: HKEY_CURRENT_USER,
+                     key: "Software\\Policies\\Microsoft\\Windows\\Explorer",
+                     valname: "NoWindowMinimizingShortcuts",
+                     val: 1
+                 }
+                 // need restart explorer.exe
+                 ),
 
             {
                 // if we meet any of MSGOTHIC.TTC, MSJH.TTC, MSYH.TTC but haven't meet target CN font, we insert it
@@ -233,10 +304,10 @@
                     return "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\FontLink\\SystemLink";
                 },
                 keyroot: function() {
-                    return HKEY_CURRENT_USER;
+                    return HKEY_LOCAL_MACHINE;
                 },
                 cnFont: function () {
-                    return ["msgothic.ttc", "msjh.ttc", "msyh.ttc"];
+                    return ["msgothic.ttc", "msjh.ttc", "msyh.ttc", "simsun.ttc", "mingliu.ttc"];
                 },
                 targetFont: function () {
                     return ["XHEI.TTC,XHei,128,96", "XHEI.TTC,XHei"];

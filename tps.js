@@ -405,7 +405,7 @@ String.prototype.beginWithOneOf = function (arr) {
 	            param.sValueName = valname;
 	            if (val != null) {
 	                if (typeof (val) == "string") param.sValue = val;
-	                else if (typeof (val) == "array") param.sValue = val;
+	                else if (val instanceof Array) param.sValue = val;
 	                else param.uValue = val;
 	            }
 	        } catch (e) { }
@@ -445,7 +445,15 @@ String.prototype.beginWithOneOf = function (arr) {
             return s != undefined && s != null;
 		},
 		CreateKey: function (root, key) {
-		    return tps.reg.InvokeCommonRegTask("CreateKey", root, key, null, null);
+		    var dirs = key.split(/\\|\//);
+		    var k = "";
+		    for (var i in dirs) {
+		        if (k != "") k += "\\";
+		        k += dirs[i];
+		        try {
+		            tps.reg.InvokeCommonRegTask("CreateKey", root, k, null, null);
+		        } catch (e) { }
+		    }
 		},
 		DeleteKey: function (root, key) {
 		    return tps.reg.InvokeCommonRegTask("DeleteKey", root, key, null, null);
